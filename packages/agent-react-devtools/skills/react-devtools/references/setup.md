@@ -57,9 +57,8 @@ Then imports it in `app/layout.tsx`.
 import 'agent-react-devtools/connect';
 ```
 
-### React Native 0.87+ / Expo
+### React Native / Expo
 
-React Native 0.87 removed the legacy standalone DevTools auto-connect path.
 The Metro wrapper and entry-graph import below are both mandatory.
 
 ```bash
@@ -114,9 +113,9 @@ agent-react-devtools wait --connected --timeout 30
 agent-react-devtools status
 ```
 
-The client connects only from React Native 0.87+ native development runtimes.
-Native production builds exit without connecting; web and default/server
-imports resolve to no-op modules.
+The client connects only from native development runtimes. Native production
+builds exit without connecting; web and default/server imports resolve to
+no-op modules.
 
 ## Manual Web Setup
 

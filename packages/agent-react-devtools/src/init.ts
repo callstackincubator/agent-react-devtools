@@ -362,7 +362,7 @@ export async function runInit(
   }
 
   if (framework === 'react-native') {
-    console.log('\nReact Native 0.87+ requires manual setup.');
+    console.log('\nReact Native requires manual setup.');
     console.log('No files were changed by init.\n');
     console.log('1. Install agent-react-devtools:');
     console.log('   npm install -D agent-react-devtools\n');

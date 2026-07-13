@@ -1,12 +1,12 @@
 # Expo Example App
 
-A minimal Expo app showing the React Native 0.87+ `agent-react-devtools`
+A minimal Expo app showing the React Native `agent-react-devtools`
 configuration.
 
 > This fixture currently uses React Native 0.81.5, so its client-side version
 > guard intentionally makes the bootstrap a no-op. It validates the Metro and
-> application configuration shape, but does not validate the React Native 0.87
-> runtime connection.
+> application configuration shape, but does not validate the runtime
+> connection.
 
 ## Setup
 
@@ -26,8 +26,8 @@ The example already contains both required integration points:
   graph.
 
 This checked-in React Native 0.81 fixture cannot test a live connection. To
-exercise the same configuration in an Expo project based on React Native 0.87
-or newer, restart Metro and run:
+exercise the same configuration in an Expo project where the bootstrap is
+active, restart Metro and run:
 
 ```sh
 # Terminal 1: Start the daemon

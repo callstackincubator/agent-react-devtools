@@ -200,7 +200,7 @@ describe('runInit', () => {
     expect(content).toBe(original);
   });
 
-  it('prints manual React Native 0.87 setup without modifying files', async () => {
+  it('prints manual React Native setup without modifying files', async () => {
     const packageJson = JSON.stringify({
       dependencies: { 'react-native': '^0.87.0' },
     });
@@ -216,7 +216,8 @@ describe('runInit', () => {
       await runInit(dir, true);
 
       const output = log.mock.calls.flat().join('\n');
-      expect(output).toContain('React Native 0.87+ requires manual setup');
+      expect(output).toContain('React Native requires manual setup');
+      expect(output).not.toContain('0.87');
       expect(output).toContain('npm install -D agent-react-devtools');
       expect(output).not.toContain('react-devtools-core');
       expect(output).toContain('withAgentReactDevTools');

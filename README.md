@@ -241,10 +241,11 @@ Options:
 reactDevtools({ port: 8097, host: "localhost" });
 ```
 
-### React Native 0.87+
+### React Native
 
-React Native 0.87 removed the legacy standalone React DevTools auto-connect
-path. Projects must now add the agent bootstrap to Metro explicitly:
+> Before React Native 0.87, standalone DevTools connected automatically without
+> code changes. React Native 0.87 removed that path, so the setup below is now
+> required.
 
 ```sh
 npm install --save-dev agent-react-devtools
@@ -322,9 +323,9 @@ launching the app:
 adb reverse tcp:8097 tcp:8097
 ```
 
-This integration connects only from a native development runtime and only on
-React Native 0.87 or newer. Native production builds exit without connecting;
-browser and default/server imports resolve to no-op modules.
+This integration connects only from a native development runtime. Native
+production builds exit without connecting; browser and default/server imports
+resolve to no-op modules.
 
 If `status` reports zero connected apps:
 
@@ -332,7 +333,7 @@ If `status` reports zero connected apps:
 2. Ensure `withAgentReactDevTools` wraps the final config, outside other Metro wrappers.
 3. Stop and restart Metro; if its cache is stale, use `--reset-cache` (bare) or `npx expo start -c`.
 4. Confirm the daemon is listening on 8097 and repeat `adb reverse` for Android devices.
-5. Check that the app is a development build running React Native 0.87+.
+5. Check that the app is a development build.
 
 ## Using with agent-browser
 

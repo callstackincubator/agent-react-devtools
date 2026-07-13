@@ -119,6 +119,6 @@ Categories with no changes are omitted. Keys are deduplicated across commits in 
 ## Setup
 
 ### `agent-react-devtools init [--dry-run]`
-Auto-detect the framework in the current directory and configure the devtools connection. Supports Vite, Next.js, CRA, and Expo/React Native.
+Auto-detect the framework in the current directory. It configures Vite, Next.js, and CRA automatically. For Expo/React Native, it prints the required manual Metro-wrapper and entry-import steps without editing files.
 
 Use `--dry-run` to preview changes without writing files.

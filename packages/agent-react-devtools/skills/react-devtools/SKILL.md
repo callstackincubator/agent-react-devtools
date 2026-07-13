@@ -167,7 +167,7 @@ agent-react-devtools status  # Should show 1 connected app
 ## Important Rules
 
 - **Labels reset** when the app reloads or components unmount/remount. After a reload, use `wait --connected` then re-check with `get tree` or `find`.
-- **`status` first** — if status shows 0 connected apps, the React app is not connected. The user may need to run `npx agent-react-devtools init` in their project first.
+- **`status` first** — if status shows 0 connected apps, the React app is not connected. Web users may need to run `npx agent-react-devtools init`; React Native 0.87+ users need both manual steps in [setup.md](references/setup.md).
 - **Headed browser required** — if using `agent-browser`, always use `--headed` mode. Headless Chromium does not properly load the devtools connect script.
 - **Profile while interacting** — profiling only captures renders that happen between `profile start` and `profile stop`. Make sure the relevant interaction happens during that window.
 - **Use `--depth`** on large trees — a deep tree can produce a lot of output. Start with `--depth 3` or `--depth 4` and go deeper only on the subtree you care about.

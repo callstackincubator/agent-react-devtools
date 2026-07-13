@@ -217,7 +217,8 @@ describe('runInit', () => {
 
       const output = log.mock.calls.flat().join('\n');
       expect(output).toContain('React Native 0.87+ requires manual setup');
-      expect(output).toContain('react-devtools-core@^6.1.5');
+      expect(output).toContain('npm install -D agent-react-devtools');
+      expect(output).not.toContain('react-devtools-core');
       expect(output).toContain('withAgentReactDevTools');
       expect(output).toContain("import 'agent-react-devtools/react-native'");
       expect(output).not.toContain('connect to DevTools automatically');

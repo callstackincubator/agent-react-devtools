@@ -247,7 +247,7 @@ React Native 0.87 removed the legacy standalone React DevTools auto-connect
 path. Projects must now add the agent bootstrap to Metro explicitly:
 
 ```sh
-npm install --save-dev agent-react-devtools react-devtools-core@^6.1.5
+npm install --save-dev agent-react-devtools
 ```
 
 Both of the following steps are required.

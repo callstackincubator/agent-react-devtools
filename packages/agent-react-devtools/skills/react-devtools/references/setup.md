@@ -63,7 +63,7 @@ React Native 0.87 removed the legacy standalone DevTools auto-connect path.
 The Metro wrapper and entry-graph import below are both mandatory.
 
 ```bash
-npm install --save-dev agent-react-devtools react-devtools-core@^6.1.5
+npm install --save-dev agent-react-devtools
 ```
 
 For bare React Native, wrap the final composed config:

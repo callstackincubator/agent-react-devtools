@@ -364,12 +364,16 @@ export async function runInit(
   if (framework === 'react-native') {
     console.log('\nReact Native 0.87+ requires manual setup.');
     console.log('No files were changed by init.\n');
-    console.log('1. Wrap your final Metro config:');
+    console.log('1. Install compatible dependencies:');
+    console.log(
+      '   npm install -D agent-react-devtools react-devtools-core@^6.1.5\n',
+    );
+    console.log('2. Wrap your final Metro config:');
     console.log(
       "   const { withAgentReactDevTools } = require('agent-react-devtools/metro');",
     );
     console.log('   module.exports = withAgentReactDevTools(config);\n');
-    console.log('2. Import the bootstrap from your entry graph:');
+    console.log('3. Import the bootstrap from your entry graph:');
     console.log("   import 'agent-react-devtools/react-native';\n");
     console.log('Next steps:');
     console.log('  1. Start the daemon: agent-react-devtools start');

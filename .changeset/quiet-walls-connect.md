@@ -4,4 +4,5 @@
 
 Add React Native 0.87+ support through a Metro config wrapper and native
 bootstrap entry. React Native apps now wrap their final Metro config and import
-`agent-react-devtools/react-native` from the application entry graph.
+`agent-react-devtools/react-native` from the application entry graph. Install
+`react-devtools-core@^6.1.5` to match React Native's DevTools backend.

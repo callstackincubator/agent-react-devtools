@@ -4,5 +4,6 @@ declare module 'react-devtools-core' {
     port?: number;
     websocket?: WebSocket;
     host?: string;
+    isAppActive?: () => boolean;
   }): void;
 }

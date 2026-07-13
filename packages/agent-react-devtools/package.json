@@ -12,6 +12,17 @@
       "types": "./dist/connect.d.ts",
       "import": "./dist/connect.js"
     },
+    "./metro": {
+      "types": "./dist/metro.d.ts",
+      "import": "./dist/metro.js",
+      "require": "./dist/metro.cjs"
+    },
+    "./react-native": {
+      "types": "./dist/react-native.d.ts",
+      "browser": "./dist/react-native-noop.js",
+      "react-native": "./dist/react-native.js",
+      "default": "./dist/react-native-noop.js"
+    },
     "./vite": {
       "types": "./dist/vite.d.ts",
       "import": "./dist/vite.js"
@@ -53,10 +64,14 @@
     "zod": "^3.24.0"
   },
   "peerDependencies": {
+    "react-native": ">=0.0.0",
     "react-devtools-core": ">=5.0.0",
     "vite": ">=5.0.0"
   },
   "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    },
     "react-devtools-core": {
       "optional": true
     },

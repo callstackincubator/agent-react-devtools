@@ -1,15 +1,18 @@
 # Setup Guide
 
-agent-react-devtools works with any React or React Native app. The `init` command auto-detects your framework and configures everything.
+agent-react-devtools works with React web and React Native apps. The `init`
+command auto-configures Vite, Next.js, Create React App, and standard React
+Native/Expo projects with CommonJS Metro configs.
 
-## Auto Setup (Recommended)
+## Web Auto Setup (Recommended)
 
 ```bash
 cd your-react-app
 npx agent-react-devtools init
 ```
 
-This detects the framework and applies the minimal configuration needed.
+This detects a supported web framework and applies the minimal configuration
+needed.
 
 Use `--dry-run` to preview changes without modifying files:
 ```bash
@@ -56,20 +59,76 @@ import 'agent-react-devtools/connect';
 
 ### React Native / Expo
 
-React Native apps auto-connect to the devtools WebSocket on port 8097 — no code changes needed.
+The Metro wrapper and entry-graph import below are both mandatory. For a
+standard project, `init` adds both automatically: it supports existing
+`metro.config.js`/`.cjs` files, or creates the appropriate default config when
+none exists, then patches `package.json` `main`, Expo Router's root layout,
+bare `index.*`, or Expo `App.*`.
+
+It safely falls back without editing files for ESM, TypeScript, JSON or
+package-field Metro configurations, custom `--config` usage, or ambiguous
+targets. In those cases, apply the two manual steps below.
+
+```bash
+npm install --save-dev agent-react-devtools
+```
+
+For bare React Native, wrap the final composed config:
+
+```js
+// metro.config.js
+const { getDefaultConfig, mergeConfig } = require('@react-native/metro-config');
+const { withAgentReactDevTools } = require('agent-react-devtools/metro');
+
+const projectConfig = {};
+const config = mergeConfig(getDefaultConfig(__dirname), projectConfig);
+
+module.exports = withAgentReactDevTools(config);
+```
+
+For Expo, extend Expo's Metro config:
+
+```js
+// metro.config.js
+const { getDefaultConfig } = require('expo/metro-config');
+const { withAgentReactDevTools } = require('agent-react-devtools/metro');
+
+const config = getDefaultConfig(__dirname);
+
+module.exports = withAgentReactDevTools(config);
+```
+
+`withAgentReactDevTools` must be the outermost wrapper around the final config
+so existing serializer hooks are retained. Then import the bootstrap from a
+module in the application entry graph, such as `index.js` or Expo Router's
+root layout:
+
+```ts
+import 'agent-react-devtools/react-native';
+```
+
+The import puts the module into Metro's dependency graph; the wrapper executes
+it after React Native initialization and before application modules. Restart
+Metro after changing `metro.config.js`.
+
+`uninit` removes only the ownership-marked import and Metro wrapper it added.
+It deletes an auto-created config only if it is still unchanged.
+
+The daemon and client use port 8097 by default:
 
 ```bash
 agent-react-devtools start
-npx react-native start
-# or: npx expo start
+adb reverse tcp:8097 tcp:8097 # Android device over USB
+npx react-native start        # or: npx expo start
+agent-react-devtools wait --connected --timeout 30
+agent-react-devtools status
 ```
 
-For physical devices, reverse the port:
-```bash
-adb reverse tcp:8097 tcp:8097
-```
+The client connects only from native development runtimes. Native production
+builds exit without connecting; web and default/server imports resolve to
+no-op modules.
 
-## Manual Setup
+## Manual Web Setup
 
 If `init` doesn't cover your setup, add this as the first import in your entry point:
 
@@ -96,9 +155,11 @@ Apps: 1 connected, 42 components
 
 If `Apps: 0 connected`:
 1. Check the app is running in dev mode
-2. Check the console for WebSocket connection errors
-3. Ensure no other DevTools instance is using port 8097
-4. If using `agent-browser`, make sure you're using **headed mode** (`--headed`) — headless Chromium does not properly execute the devtools connect script
+2. For React Native, verify both the outermost Metro wrapper and entry-graph import, then restart Metro
+3. Check the console for WebSocket connection errors
+4. Ensure no other DevTools instance is using port 8097
+5. For an Android device, repeat `adb reverse tcp:8097 tcp:8097`
+6. If using `agent-browser`, make sure you're using **headed mode** (`--headed`) — headless Chromium does not properly execute the devtools connect script
 
 ## Using with agent-browser
 

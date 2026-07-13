@@ -41,4 +41,29 @@ export default defineConfig([
     sourcemap: true,
     external: ['vite'],
   },
+  // Node entry — Metro config wrapper (ESM + CommonJS)
+  {
+    entry: {
+      metro: 'src/metro-plugin.ts',
+    },
+    format: ['esm', 'cjs'],
+    target: 'node18',
+    platform: 'node',
+    dts: true,
+    sourcemap: true,
+    shims: true,
+  },
+  // React Native client entries — transformed by Metro in the consuming app
+  {
+    entry: {
+      'react-native': 'src/react-native.ts',
+      'react-native-noop': 'src/react-native-noop.ts',
+    },
+    format: ['esm'],
+    target: 'es2019',
+    platform: 'neutral',
+    dts: true,
+    sourcemap: true,
+    external: ['react-native', 'react-devtools-core'],
+  },
 ]);

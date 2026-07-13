@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@types/react": "~19.1.10",
+    "agent-react-devtools": "workspace:*",
     "typescript": "^5.5.0"
   }
 }

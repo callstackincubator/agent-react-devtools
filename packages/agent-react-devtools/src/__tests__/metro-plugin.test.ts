@@ -51,6 +51,35 @@ describe('withAgentReactDevTools', () => {
     expect(serializer.getModulesRunBeforeMainModule).toBe(originalCallback);
     expect(modules[0]).toBe('existing-serializer:/entry.js');
   });
+
+  it('wraps Metro config factories without changing their arguments or serializer hooks', () => {
+    const factory = (projectRoot: string) => ({
+      projectRoot,
+      serializer: {
+        getModulesRunBeforeMainModule: () => ['/react-native/InitializeCore.js'],
+      },
+    });
+
+    const wrapped = withAgentReactDevTools(factory);
+    const config = wrapped('/app');
+
+    expect(config.projectRoot).toBe('/app');
+    expect(config.serializer.getModulesRunBeforeMainModule('/app/index.js')).toEqual([
+      '/react-native/InitializeCore.js',
+      expect.stringMatching(/react-native\.js$/),
+    ]);
+  });
+
+  it('wraps async and promise Metro config exports', async () => {
+    const asyncFactory = async () => ({ serializer: {} });
+    const promisedConfig = Promise.resolve({ serializer: {} });
+
+    const fromFactory = await withAgentReactDevTools(asyncFactory)();
+    const fromPromise = await withAgentReactDevTools(promisedConfig);
+
+    expect(fromFactory.serializer.getModulesRunBeforeMainModule('/app/index.js')).toHaveLength(1);
+    expect(fromPromise.serializer.getModulesRunBeforeMainModule('/app/index.js')).toHaveLength(1);
+  });
 });
 
 describe('React Native package exports', () => {

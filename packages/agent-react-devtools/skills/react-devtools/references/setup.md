@@ -1,8 +1,8 @@
 # Setup Guide
 
 agent-react-devtools works with React web and React Native apps. The `init`
-command auto-configures Vite, Next.js, and Create React App. For React Native,
-it prints the manual setup steps without editing files.
+command auto-configures Vite, Next.js, Create React App, and standard React
+Native/Expo projects with CommonJS Metro configs.
 
 ## Web Auto Setup (Recommended)
 
@@ -59,7 +59,15 @@ import 'agent-react-devtools/connect';
 
 ### React Native / Expo
 
-The Metro wrapper and entry-graph import below are both mandatory.
+The Metro wrapper and entry-graph import below are both mandatory. For a
+standard project, `init` adds both automatically: it supports existing
+`metro.config.js`/`.cjs` files, or creates the appropriate default config when
+none exists, then patches `package.json` `main`, Expo Router's root layout,
+bare `index.*`, or Expo `App.*`.
+
+It safely falls back without editing files for ESM, TypeScript, JSON or
+package-field Metro configurations, custom `--config` usage, or ambiguous
+targets. In those cases, apply the two manual steps below.
 
 ```bash
 npm install --save-dev agent-react-devtools
@@ -102,6 +110,9 @@ import 'agent-react-devtools/react-native';
 The import puts the module into Metro's dependency graph; the wrapper executes
 it after React Native initialization and before application modules. Restart
 Metro after changing `metro.config.js`.
+
+`uninit` removes only the ownership-marked import and Metro wrapper it added.
+It deletes an auto-created config only if it is still unchanged.
 
 The daemon and client use port 8097 by default:
 

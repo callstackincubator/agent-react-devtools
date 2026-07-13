@@ -199,8 +199,10 @@ patch the appropriate web entry or config:
 npx agent-react-devtools init
 ```
 
-React Native is detected too, but `init` only prints the manual React Native
-setup shown below; it does not edit Metro or application files.
+For standard React Native and Expo projects, `init` also configures Metro and a
+reachable app module. It supports existing CommonJS (`.js`/`.cjs`) Metro
+configs and creates one when none exists. Use the manual setup below for ESM,
+TypeScript, JSON/package-field, custom `--config`, or ambiguous Metro setups.
 
 To undo these changes:
 
@@ -252,6 +254,13 @@ npm install --save-dev agent-react-devtools
 ```
 
 Both of the following steps are required.
+
+`npx agent-react-devtools init` performs both steps automatically for the
+common CommonJS Metro configurations and entries it recognizes: `package.json`
+`main`, Expo Router's root layout, bare `index.*`, and Expo `App.*`. It patches
+all available platform-specific entries when a shared entry does not exist.
+The CLI first preflights every target and leaves files unchanged when it cannot
+safely identify the config or entry. `uninit` removes only its marked edits.
 
 #### 1. Wrap the final Metro config
 
@@ -334,6 +343,13 @@ If `status` reports zero connected apps:
 3. Stop and restart Metro; if its cache is stale, use `--reset-cache` (bare) or `npx expo start -c`.
 4. Confirm the daemon is listening on 8097 and repeat `adb reverse` for Android devices.
 5. Check that the app is a development build.
+
+#### Manual fallback
+
+Configure the two steps above manually when Metro uses ESM (`.mjs`),
+TypeScript, JSON or a package-field configuration; when your app starts Metro
+with a custom `--config`; or when the CLI reports an ambiguous config or entry.
+Keep `withAgentReactDevTools` as the final outermost wrapper.
 
 ## Using with agent-browser
 

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { mkdtempSync, writeFileSync, mkdirSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -199,6 +199,35 @@ describe('runInit', () => {
     const content = readFileSync(join(dir, 'vite.config.ts'), 'utf-8');
     expect(content).toBe(original);
   });
+
+  it('prints manual React Native 0.87 setup without modifying files', async () => {
+    const packageJson = JSON.stringify({
+      dependencies: { 'react-native': '^0.87.0' },
+    });
+    const metroConfig = `module.exports = { serializer: {} };\n`;
+    const entry = `import { AppRegistry } from 'react-native';\n`;
+    writeFileSync(join(dir, 'package.json'), packageJson);
+    writeFileSync(join(dir, 'metro.config.js'), metroConfig);
+    writeFileSync(join(dir, 'index.js'), entry);
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    try {
+      await runInit(dir, false);
+      await runInit(dir, true);
+
+      const output = log.mock.calls.flat().join('\n');
+      expect(output).toContain('React Native 0.87+ requires manual setup');
+      expect(output).toContain('withAgentReactDevTools');
+      expect(output).toContain("import 'agent-react-devtools/react-native'");
+      expect(output).not.toContain('connect to DevTools automatically');
+    } finally {
+      log.mockRestore();
+    }
+
+    expect(readFileSync(join(dir, 'package.json'), 'utf-8')).toBe(packageJson);
+    expect(readFileSync(join(dir, 'metro.config.js'), 'utf-8')).toBe(metroConfig);
+    expect(readFileSync(join(dir, 'index.js'), 'utf-8')).toBe(entry);
+  });
 });
 
 describe('runUninit', () => {
@@ -337,5 +366,23 @@ describe('runUninit', () => {
     await runInit(dir, false);
     const afterInit2 = readFileSync(join(dir, 'src/index.tsx'), 'utf-8');
     expect(afterInit2).toContain('agent-react-devtools');
+  });
+
+  it('explains that React Native manual setup has nothing to uninit', async () => {
+    writeFileSync(
+      join(dir, 'package.json'),
+      JSON.stringify({ dependencies: { 'react-native': '^0.87.0' } }),
+    );
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+
+    try {
+      await runUninit(dir, false);
+      const output = log.mock.calls.flat().join('\n');
+      expect(output).toContain('manual setup');
+      expect(output).toContain('no changes to remove');
+      expect(output).not.toContain('configuration has been removed');
+    } finally {
+      log.mockRestore();
+    }
   });
 });

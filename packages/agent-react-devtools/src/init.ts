@@ -310,7 +310,9 @@ export async function runUninit(
   }
 
   if (framework === 'react-native') {
-    console.log('\nReact Native detected - no code changes were made by init.');
+    console.log(
+      '\nReact Native init only prints manual setup; no changes to remove.',
+    );
     return;
   }
 
@@ -360,17 +362,18 @@ export async function runInit(
   }
 
   if (framework === 'react-native') {
-    console.log('\nReact Native detected — no code changes needed!');
-    console.log('React Native apps connect to DevTools automatically.\n');
+    console.log('\nReact Native 0.87+ requires manual setup.');
+    console.log('No files were changed by init.\n');
+    console.log('1. Wrap your final Metro config:');
+    console.log(
+      "   const { withAgentReactDevTools } = require('agent-react-devtools/metro');",
+    );
+    console.log('   module.exports = withAgentReactDevTools(config);\n');
+    console.log('2. Import the bootstrap from your entry graph:');
+    console.log("   import 'agent-react-devtools/react-native';\n");
     console.log('Next steps:');
     console.log('  1. Start the daemon: agent-react-devtools start');
-    console.log('  2. Start your app: npx react-native start');
-    console.log('\nFor physical devices:');
-    console.log('  adb reverse tcp:8097 tcp:8097');
-    console.log('\nFor Expo:');
-    console.log('  The connection works automatically with Expo dev client.');
-    console.log('\nCustom port:');
-    console.log('  Set REACT_DEVTOOLS_PORT=<port> environment variable');
+    console.log('  2. Start Metro and your app');
     return;
   }
 

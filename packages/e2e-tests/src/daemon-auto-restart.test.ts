@@ -37,8 +37,11 @@ describe('Daemon auto-restart on rebuild', () => {
     infoBefore.buildMtime = 1000;
     fs.writeFileSync(infoPath, JSON.stringify(infoBefore, null, 2));
 
+    // Any command routed through ensureDaemon exercises the rebuild check.
+    // `get tree` refuses with no app attached, which is beside the point here:
+    // reaching the daemon at all is what proves the restart happened.
     const result = await runCli(['get', 'tree'], stateDir);
-    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toContain('No app is connected');
 
     const infoAfter = JSON.parse(fs.readFileSync(infoPath, 'utf-8'));
     expect(infoAfter.pid).not.toBe(infoBefore.pid);
@@ -50,7 +53,7 @@ describe('Daemon auto-restart on rebuild', () => {
     const infoBefore = JSON.parse(fs.readFileSync(infoPath, 'utf-8'));
 
     const result = await runCli(['get', 'tree'], stateDir);
-    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toContain('No app is connected');
 
     const infoAfter = JSON.parse(fs.readFileSync(infoPath, 'utf-8'));
     expect(infoAfter.pid).toBe(infoBefore.pid);

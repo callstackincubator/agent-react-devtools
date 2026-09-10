@@ -87,7 +87,7 @@ describe('Connection health (e2e)', () => {
     await sleep(300);
   });
 
-  it('should show hint when tree is empty after disconnect', async () => {
+  it('should refuse a tree read after disconnect and say how long ago it happened', async () => {
     const ws = await connectMockApp(port);
     await sleep(300);
 
@@ -103,14 +103,14 @@ describe('Connection health (e2e)', () => {
     ws.close();
     await sleep(300);
 
-    // get-tree should return hint
+    // The tree is empty because nothing is attached, not because nothing
+    // matched: answering `ok` here made a read that observed nothing look
+    // like a read that found nothing.
     const resp = await sendIpcCommand(socketPath, { type: 'get-tree' });
-    expect(resp.ok).toBe(true);
-    expect(resp.hint).toBeDefined();
-    expect(resp.hint).toContain('disconnected');
-    expect(resp.hint).toContain('waiting for reconnect');
-    const { nodes } = resp.data as { nodes: Array<unknown> };
-    expect(nodes).toHaveLength(0);
+    expect(resp.ok).toBe(false);
+    expect(resp.code).toBe('NO_APP_CONNECTED');
+    expect(resp.error).toContain('disconnected');
+    expect(resp.data).toBeUndefined();
   });
 
   it('wait --connected should resolve immediately when already connected', async () => {

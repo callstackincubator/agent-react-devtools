@@ -548,6 +548,41 @@ export class ComponentTree {
   }
 
   /**
+   * A second React DevTools backend attaching to the same app (React Native
+   * DevTools opening, another agent) re-flushes the whole tree through the
+   * shared hook under a fresh fiber-ID space, and later commits reach only that
+   * new root. The copy this tree already holds is therefore frozen, not merely
+   * duplicated. When `rootId` structurally duplicates an older root of the same
+   * renderer, drop the older root and return its id.
+   */
+  reconcileReflushedRoot(rootId: number): number | null {
+    const root = this.nodes.get(rootId);
+    if (!root) return null;
+    for (const olderId of this.roots) {
+      if (olderId === rootId) break;
+      const older = this.nodes.get(olderId);
+      if (!older || older.rendererId !== root.rendererId) continue;
+      if (this.subtreesMatch(olderId, rootId)) {
+        this.removeNode(olderId);
+        return olderId;
+      }
+    }
+    return null;
+  }
+
+  private subtreesMatch(a: number, b: number): boolean {
+    const x = this.nodes.get(a);
+    const y = this.nodes.get(b);
+    if (!x || !y) return false;
+    if (x.type !== y.type || x.displayName !== y.displayName || x.key !== y.key) return false;
+    if (x.children.length !== y.children.length) return false;
+    for (let i = 0; i < x.children.length; i++) {
+      if (!this.subtreesMatch(x.children[i], y.children[i])) return false;
+    }
+    return true;
+  }
+
+  /**
    * Look up the @cN label for a given component ID.
    * Returns undefined if the ID has no label assigned.
    */

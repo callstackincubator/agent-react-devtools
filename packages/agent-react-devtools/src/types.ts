@@ -196,10 +196,15 @@ export type IpcCommand =
   | { type: 'wait'; condition: 'connected'; timeout?: number }
   | { type: 'wait'; condition: 'component'; name: string; timeout?: number };
 
+/** Machine-readable failure reasons, for callers that must not key on error text. */
+export type IpcFailureReason = 'no-app-attached';
+
 export interface IpcResponse {
   ok: boolean;
   data?: unknown;
   error?: string;
+  /** Set alongside `error` when the failure has a typed cause */
+  reason?: IpcFailureReason;
   /** The @cN label, passed through when commands use label-based IDs */
   label?: string;
   /** Contextual hint for empty or stale results */

@@ -65,6 +65,8 @@ Output example:
 
 `⚠N` = N warnings, `✗N` = N errors. Returns "No components with errors or warnings" when everything is clean.
 
+When no React app is attached, this and every other tree observation command (`get tree`, `get component`, `find`, `count`, `profile start`) exits 1 with `No React app is attached to the DevTools daemon ...` instead of an empty result, so a missing app can never read as a clean pass.
+
 Error/warning annotations also appear in `get tree`, `get component`, and `find` output when counts are non-zero.
 
 ## Profiling

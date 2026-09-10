@@ -257,6 +257,14 @@ export class DevToolsBridge {
     }
     const added = this.tree.applyOperations(operations);
 
+    // A second root on one connection is either a genuine multi-root app or a
+    // re-flush from another DevTools backend attaching; the tree decides by structure.
+    const roots = operations.length >= 2 ? this.connectionRoots.get(ws) : undefined;
+    if (roots && roots.size > 1) {
+      const replaced = this.tree.reconcileReflushedRoot(operations[1]);
+      if (replaced !== null) roots.delete(replaced);
+    }
+
     // Cache display names during profiling so unmounted components are still identifiable
     if (this.profiler.isActive()) {
       for (const node of added) {

@@ -139,6 +139,30 @@ class Daemon {
     });
   }
 
+  /**
+   * Commands that observe the live component tree must fail when no app is
+   * attached. An empty tree is not evidence of anything: reporting it as a
+   * result lets "no components with errors" stand in for "nothing was observed".
+   */
+  private requireAttachedApp(): IpcResponse | null {
+    const health = this.bridge.getConnectionHealth();
+    if (health.connectedApps > 0) return null;
+
+    const state = health.lastDisconnectAt !== null
+      ? `app disconnected ${Math.round((Date.now() - health.lastDisconnectAt) / 1000)}s ago, waiting for reconnect`
+      : health.hasEverConnected
+        ? 'app disconnected'
+        : 'no app has connected since the daemon started';
+    return {
+      ok: false,
+      reason: 'no-app-attached',
+      error:
+        `No React app is attached to the DevTools daemon on port ${this.port} (${state}). ` +
+        'Start the app in development mode, then run `agent-react-devtools wait --connected`. ' +
+        'React Native 0.87+ apps also need `agent-react-devtools init`.',
+    };
+  }
+
   private async handleCommand(cmd: IpcCommand, conn: net.Socket): Promise<IpcResponse> {
     try {
       switch (cmd.type) {
@@ -160,6 +184,8 @@ class Daemon {
           };
 
         case 'get-tree': {
+          const detached = this.requireAttachedApp();
+          if (detached) return detached;
           let resolvedRoot: number | undefined;
           if (cmd.root !== undefined) {
             resolvedRoot = this.tree.resolveId(cmd.root);
@@ -178,21 +204,12 @@ class Daemon {
           if (resolvedRoot !== undefined && treeData.length === 0) {
             return { ok: false, error: `Component ${cmd.root} not found` };
           }
-          const response: IpcResponse = {
-            ok: true,
-            data: { nodes: treeData, totalCount },
-          };
-          if (treeData.length === 0) {
-            const health = this.bridge.getConnectionHealth();
-            if (health.hasEverConnected && health.connectedApps === 0 && health.lastDisconnectAt !== null) {
-              const ago = Math.round((Date.now() - health.lastDisconnectAt) / 1000);
-              response.hint = `app disconnected ${ago}s ago, waiting for reconnect...`;
-            }
-          }
-          return response;
+          return { ok: true, data: { nodes: treeData, totalCount } };
         }
 
         case 'get-component': {
+          const detachedForComponent = this.requireAttachedApp();
+          if (detachedForComponent) return detachedForComponent;
           const resolvedId = this.tree.resolveId(cmd.id);
           if (resolvedId === undefined) {
             return { ok: false, error: `Component ${cmd.id} not found` };
@@ -212,25 +229,30 @@ class Daemon {
         }
 
         case 'find':
-          return {
+          return this.requireAttachedApp() ?? {
             ok: true,
             data: this.tree.findByName(cmd.name, cmd.exact),
           };
 
         case 'count':
-          return {
+          return this.requireAttachedApp() ?? {
             ok: true,
             data: this.tree.getCountByType(),
           };
 
-        case 'errors':
+        case 'errors': {
+          const detachedForErrors = this.requireAttachedApp();
+          if (detachedForErrors) return detachedForErrors;
           this.tree.getTree();
           return {
             ok: true,
             data: this.tree.getComponentsWithErrorsOrWarnings(),
           };
+        }
 
-        case 'profile-start':
+        case 'profile-start': {
+          const detachedForProfile = this.requireAttachedApp();
+          if (detachedForProfile) return detachedForProfile;
           this.profiler.start(cmd.name);
           // Snapshot existing component names so they survive unmounts
           for (const id of this.tree.getAllNodeIds()) {
@@ -239,6 +261,7 @@ class Daemon {
           }
           this.bridge.startProfiling();
           return { ok: true, data: 'Profiling started' };
+        }
 
         case 'profile-stop': {
           await this.bridge.stopProfilingAndCollect();

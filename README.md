@@ -152,7 +152,7 @@ Components with errors or warnings are annotated in tree and search output:
 @c5 [fn] Form ⚠2 ✗1
 ```
 
-Use the `errors` command to list only components with issues:
+Use the `errors` command to list only components with issues. When no app is attached, it exits 1 with `No React app is attached` rather than reporting a clean tree:
 
 ```sh
 agent-react-devtools errors

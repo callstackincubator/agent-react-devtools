@@ -4,7 +4,13 @@ import path from 'node:path';
 import { DevToolsBridge } from './devtools-bridge.js';
 import { ComponentTree } from './component-tree.js';
 import { Profiler } from './profiler.js';
-import type { IpcCommand, IpcResponse, DaemonInfo, StatusInfo } from './types.js';
+import type {
+  IpcCommand,
+  IpcResponse,
+  DaemonInfo,
+  StatusInfo,
+  ConnectionHealth,
+} from './types.js';
 
 const DEFAULT_STATE_DIR = path.join(
   process.env.HOME || process.env.USERPROFILE || '/tmp',
@@ -35,6 +41,17 @@ function enrichWithLabels(
       if (node) item.type = node.type;
     }
   }
+}
+
+/**
+ * How long the last app has been gone, when one was ever attached. A read that
+ * missed a live app by seconds deserves a different answer from one against a
+ * daemon nothing has ever connected to.
+ */
+function describeDisconnect(health: ConnectionHealth): string {
+  if (!health.hasEverConnected || health.lastDisconnectAt === null) return '';
+  const seconds = Math.round((Date.now() - health.lastDisconnectAt) / 1000);
+  return ` (the last app disconnected ${seconds}s ago)`;
 }
 
 class Daemon {
@@ -139,6 +156,25 @@ class Daemon {
     });
   }
 
+  /**
+   * A component read answers a question about an attached app's tree. With no
+   * app attached the tree is empty for a reason the caller cannot see, so an
+   * empty answer is indistinguishable from "nothing matched" and a check that
+   * was never performed reads as a check that passed. Refuse instead.
+   *
+   * This is read in the same synchronous turn as the tree itself, so nothing
+   * can attach or detach between the check and the answer.
+   */
+  private componentReadUnavailable(): IpcResponse | null {
+    const health = this.bridge.getConnectionHealth();
+    if (health.connectedApps > 0) return null;
+    return {
+      ok: false,
+      code: 'NO_APP_CONNECTED',
+      error: `No app is connected, so there is no component tree to read${describeDisconnect(health)}. Run \`devtools status\` to check the daemon, and \`devtools wait --connected\` to block until an app attaches.`,
+    };
+  }
+
   private async handleCommand(cmd: IpcCommand, conn: net.Socket): Promise<IpcResponse> {
     try {
       switch (cmd.type) {
@@ -160,6 +196,8 @@ class Daemon {
           };
 
         case 'get-tree': {
+          const unobservable = this.componentReadUnavailable();
+          if (unobservable) return unobservable;
           let resolvedRoot: number | undefined;
           if (cmd.root !== undefined) {
             resolvedRoot = this.tree.resolveId(cmd.root);
@@ -178,21 +216,15 @@ class Daemon {
           if (resolvedRoot !== undefined && treeData.length === 0) {
             return { ok: false, error: `Component ${cmd.root} not found` };
           }
-          const response: IpcResponse = {
+          return {
             ok: true,
             data: { nodes: treeData, totalCount },
           };
-          if (treeData.length === 0) {
-            const health = this.bridge.getConnectionHealth();
-            if (health.hasEverConnected && health.connectedApps === 0 && health.lastDisconnectAt !== null) {
-              const ago = Math.round((Date.now() - health.lastDisconnectAt) / 1000);
-              response.hint = `app disconnected ${ago}s ago, waiting for reconnect...`;
-            }
-          }
-          return response;
         }
 
         case 'get-component': {
+          const unobservable = this.componentReadUnavailable();
+          if (unobservable) return unobservable;
           const resolvedId = this.tree.resolveId(cmd.id);
           if (resolvedId === undefined) {
             return { ok: false, error: `Component ${cmd.id} not found` };
@@ -212,23 +244,30 @@ class Daemon {
         }
 
         case 'find':
-          return {
-            ok: true,
-            data: this.tree.findByName(cmd.name, cmd.exact),
-          };
+          return (
+            this.componentReadUnavailable() ?? {
+              ok: true,
+              data: this.tree.findByName(cmd.name, cmd.exact),
+            }
+          );
 
         case 'count':
-          return {
-            ok: true,
-            data: this.tree.getCountByType(),
-          };
+          return (
+            this.componentReadUnavailable() ?? {
+              ok: true,
+              data: this.tree.getCountByType(),
+            }
+          );
 
-        case 'errors':
+        case 'errors': {
+          const unobservable = this.componentReadUnavailable();
+          if (unobservable) return unobservable;
           this.tree.getTree();
           return {
             ok: true,
             data: this.tree.getComponentsWithErrorsOrWarnings(),
           };
+        }
 
         case 'profile-start':
           this.profiler.start(cmd.name);

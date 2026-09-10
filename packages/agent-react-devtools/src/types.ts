@@ -168,6 +168,9 @@ export interface ConnectionEvent {
   timestamp: number;
 }
 
+/** No app is attached, so a component read has nothing to observe. */
+export type IpcErrorCode = 'NO_APP_CONNECTED';
+
 export interface ConnectionHealth {
   connectedApps: number;
   hasEverConnected: boolean;
@@ -200,6 +203,8 @@ export interface IpcResponse {
   ok: boolean;
   data?: unknown;
   error?: string;
+  /** Machine-readable reason for a refusal, so callers need not match on `error`. */
+  code?: IpcErrorCode;
   /** The @cN label, passed through when commands use label-based IDs */
   label?: string;
   /** Contextual hint for empty or stale results */

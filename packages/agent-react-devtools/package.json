@@ -1,6 +1,6 @@
 {
   "name": "agent-react-devtools",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "CLI tool for AI agents to inspect React component trees and profile performance",
   "type": "module",
   "bin": {

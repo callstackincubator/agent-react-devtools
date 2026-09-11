@@ -492,3 +492,68 @@ describe('ComponentTree', () => {
     });
   });
 });
+
+describe('ComponentTree.reconcileReflushedRoot', () => {
+  const ROOT_OP = (id: number) => [1, id, 11, 0, 1, 0, 0];
+
+  function fullTree(rendererId: number, rootId: number, base: number): number[] {
+    return buildOps(rendererId, rootId, ['App', 'Header', 'Item'], (strId) => [
+      ...ROOT_OP(rootId),
+      ...addOp(base + 1, 5, rootId, strId('App')),
+      ...addOp(base + 2, 8, base + 1, strId('Header')),
+      ...addOp(base + 3, 5, base + 1, strId('Item')),
+      ...addOp(base + 4, 5, base + 1, strId('Item')),
+    ]);
+  }
+
+  it('drops the older root when a new root of the same renderer duplicates it', () => {
+    const tree = new ComponentTree();
+    tree.applyOperations(fullTree(1, 100, 0));
+    expect(tree.getComponentCount()).toBe(5);
+
+    // Another backend attached: same fibers re-flushed under a fresh ID space
+    tree.applyOperations(fullTree(1, 500, 1000));
+    expect(tree.getComponentCount()).toBe(10);
+
+    expect(tree.reconcileReflushedRoot(500)).toBe(100);
+    expect(tree.getComponentCount()).toBe(5);
+    expect(tree.getRootIds()).toEqual([500]);
+    expect(tree.getNode(1)).toBeUndefined();
+    expect(tree.getNode(1001)?.displayName).toBe('App');
+    expect(tree.findByName('Item', true)).toHaveLength(2);
+  });
+
+  it('keeps a genuine second root whose structure differs', () => {
+    const tree = new ComponentTree();
+    tree.applyOperations(fullTree(1, 100, 0));
+    tree.applyOperations(
+      buildOps(1, 500, ['Sidebar'], (strId) => [
+        ...ROOT_OP(500),
+        ...addOp(1001, 5, 500, strId('Sidebar')),
+      ]),
+    );
+
+    expect(tree.reconcileReflushedRoot(500)).toBeNull();
+    expect(tree.getRootIds()).toEqual([100, 500]);
+    expect(tree.getComponentCount()).toBe(7);
+  });
+
+  it('never matches roots across renderers', () => {
+    const tree = new ComponentTree();
+    tree.applyOperations(fullTree(1, 100, 0));
+    tree.applyOperations(fullTree(2, 500, 1000));
+
+    expect(tree.reconcileReflushedRoot(500)).toBeNull();
+    expect(tree.getComponentCount()).toBe(10);
+  });
+
+  it('only considers roots added before the reflushed one', () => {
+    const tree = new ComponentTree();
+    tree.applyOperations(fullTree(1, 100, 0));
+    tree.applyOperations(fullTree(1, 500, 1000));
+
+    // Asking about the older root must not delete the newer, live one
+    expect(tree.reconcileReflushedRoot(100)).toBeNull();
+    expect(tree.getRootIds()).toEqual([100, 500]);
+  });
+});

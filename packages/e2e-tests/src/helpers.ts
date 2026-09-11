@@ -9,6 +9,7 @@ interface IpcResponse {
   ok: boolean;
   data?: unknown;
   error?: string;
+  reason?: string;
   hint?: string;
 }
 

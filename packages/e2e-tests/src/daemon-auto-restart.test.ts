@@ -37,7 +37,7 @@ describe('Daemon auto-restart on rebuild', () => {
     infoBefore.buildMtime = 1000;
     fs.writeFileSync(infoPath, JSON.stringify(infoBefore, null, 2));
 
-    const result = await runCli(['get', 'tree'], stateDir);
+    const result = await runCli(['profile', 'slow'], stateDir);
     expect(result.exitCode).toBe(0);
 
     const infoAfter = JSON.parse(fs.readFileSync(infoPath, 'utf-8'));
@@ -49,7 +49,7 @@ describe('Daemon auto-restart on rebuild', () => {
     const infoPath = path.join(stateDir, 'daemon.json');
     const infoBefore = JSON.parse(fs.readFileSync(infoPath, 'utf-8'));
 
-    const result = await runCli(['get', 'tree'], stateDir);
+    const result = await runCli(['profile', 'slow'], stateDir);
     expect(result.exitCode).toBe(0);
 
     const infoAfter = JSON.parse(fs.readFileSync(infoPath, 'utf-8'));

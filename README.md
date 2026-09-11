@@ -192,13 +192,17 @@ agent-react-devtools profile diff <before.json> <after.json> [--limit N] [--thre
 
 ### Quick setup
 
-Run the init command in your project root to auto-configure your framework:
+For Vite, Next.js, and Create React App, run `init` in the project root to
+patch the appropriate web entry or config:
 
 ```sh
 npx agent-react-devtools init
 ```
 
-This detects your framework (Vite, Next.js, CRA) and patches the appropriate config file.
+For standard React Native and Expo projects, `init` also configures Metro and a
+reachable app module. It supports existing CommonJS (`.js`/`.cjs`) Metro
+configs and creates one when none exists. Use the manual setup below for ESM,
+TypeScript, JSON/package-field, custom `--config`, or ambiguous Metro setups.
 
 To undo these changes:
 
@@ -206,7 +210,7 @@ To undo these changes:
 npx agent-react-devtools uninit
 ```
 
-### One-line import
+### Web one-line import
 
 Add a single import as the first line of your entry point (e.g. `src/main.tsx`):
 
@@ -241,22 +245,111 @@ reactDevtools({ port: 8097, host: "localhost" });
 
 ### React Native
 
-React Native apps connect to DevTools automatically — no code changes needed:
+> Before React Native 0.87, standalone DevTools connected automatically without
+> code changes. React Native 0.87 removed that path, so the setup below is now
+> required.
 
 ```sh
-agent-react-devtools start
-npx react-native start
+npm install --save-dev agent-react-devtools
 ```
 
-For physical devices, forward the port:
+Both of the following steps are required.
+
+`npx agent-react-devtools init` performs both steps automatically for the
+common CommonJS Metro configurations and entries it recognizes: `package.json`
+`main`, Expo Router's root layout, bare `index.*`, and Expo `App.*`. It patches
+all available platform-specific entries when a shared entry does not exist.
+The CLI first preflights every target and leaves files unchanged when it cannot
+safely identify the config or entry. `uninit` removes only its marked edits.
+
+#### 1. Wrap the final Metro config
+
+For a bare React Native app:
+
+```js
+// metro.config.js
+const { getDefaultConfig, mergeConfig } = require("@react-native/metro-config");
+const { withAgentReactDevTools } = require("agent-react-devtools/metro");
+
+const projectConfig = {};
+const config = mergeConfig(getDefaultConfig(__dirname), projectConfig);
+
+module.exports = withAgentReactDevTools(config);
+```
+
+For Expo:
+
+```js
+// metro.config.js
+const { getDefaultConfig } = require("expo/metro-config");
+const { withAgentReactDevTools } = require("agent-react-devtools/metro");
+
+const config = getDefaultConfig(__dirname);
+
+module.exports = withAgentReactDevTools(config);
+```
+
+Apply `withAgentReactDevTools` outermost, after all other Metro configuration
+and wrappers. It preserves the final config's existing serializer hooks and
+adds the agent bootstrap after React Native's own pre-main initialization.
+
+#### 2. Import the bootstrap from the entry graph
+
+Add this import to a user-owned module that is always reachable from the app
+entry—for example, bare React Native's `index.js` or Expo Router's
+`app/_layout.tsx`:
+
+```ts
+import "agent-react-devtools/react-native";
+```
+
+The import makes the bootstrap part of Metro's dependency graph. The Metro
+wrapper then executes that module before application modules; its textual
+position among imports does not control the execution order.
+
+#### Run and verify
+
+The client and daemon use port 8097 by default:
+
+```sh
+# Terminal 1
+agent-react-devtools start
+
+# Terminal 2 — restart Metro after changing metro.config.js
+npx react-native start
+# Expo: npx expo start
+
+# Terminal 3
+agent-react-devtools status
+agent-react-devtools wait --connected --timeout 30
+agent-react-devtools get tree
+```
+
+For an Android device connected over USB, forward the DevTools port before
+launching the app:
 
 ```sh
 adb reverse tcp:8097 tcp:8097
 ```
 
-For Expo, the connection works automatically with the Expo dev client.
+This integration connects only from a native development runtime. Native
+production builds exit without connecting; browser and default/server imports
+resolve to no-op modules.
 
-To use a custom port, set the `REACT_DEVTOOLS_PORT` environment variable.
+If `status` reports zero connected apps:
+
+1. Confirm both the Metro wrapper and graph import are present.
+2. Ensure `withAgentReactDevTools` wraps the final config, outside other Metro wrappers.
+3. Stop and restart Metro; if its cache is stale, use `--reset-cache` (bare) or `npx expo start -c`.
+4. Confirm the daemon is listening on 8097 and repeat `adb reverse` for Android devices.
+5. Check that the app is a development build.
+
+#### Manual fallback
+
+Configure the two steps above manually when Metro uses ESM (`.mjs`),
+TypeScript, JSON or a package-field configuration; when your app starts Metro
+with a custom `--config`; or when the CLI reports an ambiguous config or entry.
+Keep `withAgentReactDevTools` as the final outermost wrapper.
 
 ## Using with agent-browser
 

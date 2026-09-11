@@ -1,5 +1,13 @@
 # agent-react-devtools
 
+## 0.5.0
+
+### Minor Changes
+
+- [#58](https://github.com/callstackincubator/agent-react-devtools/pull/58) [`d4b1e2c`](https://github.com/callstackincubator/agent-react-devtools/commit/d4b1e2c644d40a66d60f24d41b7c37da8f1bf227) Thanks [@V3RON](https://github.com/V3RON)! - Automatically configure standard React Native and Expo projects through a
+  CommonJS Metro wrapper and a native bootstrap entry import. Unsupported Metro
+  formats and ambiguous projects retain the documented manual setup path.
+
 ## 0.4.0
 
 ### Minor Changes

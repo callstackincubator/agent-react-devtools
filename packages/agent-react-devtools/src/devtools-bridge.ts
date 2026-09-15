@@ -2,6 +2,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { ComponentTree } from './component-tree.js';
 import type { Profiler } from './profiler.js';
 import type { InspectedElement, ConnectionHealth, ConnectionEvent } from './types.js';
+import { normalizeSourceLocation } from './source-metadata.js';
 
 /**
  * React DevTools protocol bridge.
@@ -20,8 +21,14 @@ interface DevToolsMessage {
 }
 
 interface PendingInspection {
+  id: number;
   resolve: (value: InspectedElement | null) => void;
   timer: ReturnType<typeof setTimeout>;
+}
+
+interface InspectOptions {
+  preferCache?: boolean;
+  timeoutMs?: number;
 }
 
 interface PendingProfilingCollect {
@@ -37,6 +44,8 @@ export class DevToolsBridge {
   private tree: ComponentTree;
   private profiler: Profiler;
   private pendingInspections = new Map<number, PendingInspection>();
+  private inspectionCache = new Map<number, InspectedElement>();
+  private nextInspectionRequestId = 1;
   private pendingProfilingCollect: PendingProfilingCollect | null = null;
   private rendererIds = new Set<number>();
   /** Track which root fiber IDs belong to each WebSocket connection */
@@ -115,17 +124,22 @@ export class DevToolsBridge {
    * Request detailed inspection of a specific element.
    * Sends a request to the React app and waits for the response.
    */
-  inspectElement(id: number): Promise<InspectedElement | null> {
+  inspectElement(id: number, options: InspectOptions = {}): Promise<InspectedElement | null> {
     const node = this.tree.getNode(id);
     if (!node) return Promise.resolve(null);
+    const cached = this.inspectionCache.get(id);
+    if (options.preferCache && cached) return Promise.resolve(cached);
+    if (this.connections.size === 0) return Promise.resolve(cached || null);
 
     return new Promise((resolve) => {
+      const requestID = this.nextInspectionRequestId++;
+      const timeoutMs = options.timeoutMs ?? 5000;
       const timer = setTimeout(() => {
-        this.pendingInspections.delete(id);
+        this.pendingInspections.delete(requestID);
         resolve(null);
-      }, 5000);
+      }, timeoutMs);
 
-      this.pendingInspections.set(id, { resolve, timer });
+      this.pendingInspections.set(requestID, { id, resolve, timer });
 
       this.sendToAll({
         event: 'inspectElement',
@@ -133,7 +147,7 @@ export class DevToolsBridge {
           id,
           rendererID: node.rendererId,
           forceFullData: true,
-          requestID: id,
+          requestID,
           path: null,
         },
       });
@@ -256,6 +270,11 @@ export class DevToolsBridge {
       roots.add(rootFiberId);
     }
     const added = this.tree.applyOperations(operations);
+    if (this.inspectionCache.size > 0) {
+      for (const id of this.inspectionCache.keys()) {
+        if (!this.tree.getNode(id)) this.inspectionCache.delete(id);
+      }
+    }
 
     // A second root on one connection is either a genuine multi-root app or a
     // re-flush from another DevTools backend attaching; the tree decides by structure.
@@ -285,6 +304,14 @@ export class DevToolsBridge {
       }
       this.connectionRoots.delete(ws);
     }
+    if (this.connections.size === 0) {
+      this.inspectionCache.clear();
+      for (const [requestID, pending] of this.pendingInspections) {
+        clearTimeout(pending.timer);
+        pending.resolve(null);
+        this.pendingInspections.delete(requestID);
+      }
+    }
     this.lastDisconnectAt = Date.now();
     this.pushEvent({ type: 'disconnected', timestamp: Date.now() });
     this.notifyStateChange();
@@ -294,6 +321,7 @@ export class DevToolsBridge {
     const data = payload as {
       type: string;
       id: number;
+      responseID?: number;
       value?: {
         id: number;
         displayName: string;
@@ -302,25 +330,30 @@ export class DevToolsBridge {
         props: Record<string, unknown>;
         state: Record<string, unknown> | null;
         hooks: unknown[] | { data: unknown[]; cleaned: unknown[]; unserializable: unknown[] } | null;
+        source?: unknown;
       };
     };
 
     if (data.type !== 'full-data' && data.type !== 'hydrated-path') {
       // No data available
-      const pending = this.pendingInspections.get(data.id);
+      const pending = data.responseID !== undefined
+        ? this.pendingInspections.get(data.responseID)
+        : undefined;
       if (pending) {
         clearTimeout(pending.timer);
-        this.pendingInspections.delete(data.id);
+        this.pendingInspections.delete(data.responseID!);
         pending.resolve(null);
       }
       return;
     }
 
-    const pending = this.pendingInspections.get(data.id);
+    const pending = data.responseID !== undefined
+      ? this.pendingInspections.get(data.responseID)
+      : undefined;
     if (!pending || !data.value) return;
 
     clearTimeout(pending.timer);
-    this.pendingInspections.delete(data.id);
+    this.pendingInspections.delete(data.responseID!);
 
     const node = this.tree.getNode(data.id);
     const inspected: InspectedElement = {
@@ -336,8 +369,10 @@ export class DevToolsBridge {
         ? parseHooks(extractHooksArray(data.value.hooks))
         : null,
       renderedAt: null,
+      source: normalizeSourceLocation(data.value.source),
     };
 
+    this.inspectionCache.set(data.id, inspected);
     pending.resolve(inspected);
   }
 

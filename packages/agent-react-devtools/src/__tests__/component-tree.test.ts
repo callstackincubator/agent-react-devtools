@@ -194,6 +194,21 @@ describe('ComponentTree', () => {
     expect(shallow.map((n) => n.displayName)).toEqual(['App', 'Level1']);
   });
 
+  it('should build parent path strings', () => {
+    const ops = buildOps(1, 100, ['App', 'SearchPage', 'FiltersPanel', 'Context.Provider'], (s) => [
+      ...addOp(1, 5, 0, s('App')),
+      ...addOp(2, 5, 1, s('SearchPage')),
+      ...addOp(3, 5, 2, s('FiltersPanel')),
+      ...addOp(4, 5, 3, s('Context.Provider')),
+    ]);
+    tree.applyOperations(ops);
+
+    expect(tree.getPathString(4)).toBe('App > SearchPage > FiltersPanel');
+    expect(tree.getPathString(4, true)).toBe('App > SearchPage > FiltersPanel > Context.Provider');
+    expect(tree.getPathString(4, false, 2)).toBe('SearchPage > FiltersPanel');
+    expect(tree.getPathString(1)).toBeUndefined();
+  });
+
   describe('subtree extraction (rootId)', () => {
     it('should get subtree from a specific root', () => {
       const ops = buildOps(1, 100, ['App', 'Header', 'Nav', 'Logo', 'Footer'], (s) => [

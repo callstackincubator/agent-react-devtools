@@ -114,10 +114,14 @@ agent-react-devtools profile slow
 
 ```
 Slowest (by avg render time):
-  @c5 [fn] TodoList  avg:4.2ms  max:8.1ms  renders:6  causes:props-changed  changed: props: items, onDelete
-  @c4 [fn] SearchBar  avg:2.1ms  max:3.4ms  renders:12  causes:hooks-changed  changed: hooks: #0
-  @c2 [fn] Header  avg:0.8ms  max:1.2ms  renders:3  causes:parent-rendered
+  TodoItem  3 instances  src: TodoItem.tsx:14:1  top avg:4.2ms
+    @c5 [fn] TodoItem  avg:4.2ms  max:8.1ms  renders:6  causes:props-changed  in:TodoList > VisibleItems  changed: props: item, onDelete
+    @c8 [fn] TodoItem  avg:3.9ms  max:7.5ms  renders:6  causes:props-changed  in:TodoList > ArchivedItems  changed: props: item, onDelete
+    @c9 [fn] TodoItem  avg:3.5ms  max:6.8ms  renders:6  causes:props-changed  in:TodoList > SearchResults  changed: props: item, onDelete
+  @c4 [fn] SearchBar  avg:2.1ms  max:3.4ms  renders:12  causes:hooks-changed  in:App > Header  changed: hooks: #0
 ```
+
+Repeated rows are grouped only when they share the same implementation source. Components with the same display name from different files, or components without source metadata, remain separate rows.
 
 ## Commands
 

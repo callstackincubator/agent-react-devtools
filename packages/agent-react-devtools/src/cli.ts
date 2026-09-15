@@ -24,6 +24,10 @@ import { writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import type { IpcCommand } from './types.js';
 
+function getCandidateLimit(limit: number): number {
+  return Math.max(limit, Math.min(60, Math.max(20, limit * 3)));
+}
+
 function usage(): string {
   return `Usage: devtools <command> [options]
 
@@ -377,9 +381,14 @@ async function main(): Promise<void> {
 
     if (cmd0 === 'profile' && cmd1 === 'slow') {
       const limit = parseNumericFlag(flags, 'limit');
-      const resp = await sendCommand({ type: 'profile-slow', limit });
+      const visibleLimit = limit ?? 10;
+      const resp = await sendCommand({
+        type: 'profile-slow',
+        limit,
+        candidateLimit: getCandidateLimit(visibleLimit),
+      });
       if (resp.ok) {
-        console.log(formatSlowest(resp.data as any));
+        console.log(formatSlowest(resp.data as any, limit));
       } else {
         console.error(resp.error);
         process.exit(1);
@@ -389,9 +398,14 @@ async function main(): Promise<void> {
 
     if (cmd0 === 'profile' && cmd1 === 'rerenders') {
       const limit = parseNumericFlag(flags, 'limit');
-      const resp = await sendCommand({ type: 'profile-rerenders', limit });
+      const visibleLimit = limit ?? 10;
+      const resp = await sendCommand({
+        type: 'profile-rerenders',
+        limit,
+        candidateLimit: getCandidateLimit(visibleLimit),
+      });
       if (resp.ok) {
-        console.log(formatRerenders(resp.data as any));
+        console.log(formatRerenders(resp.data as any, limit));
       } else {
         console.error(resp.error);
         process.exit(1);

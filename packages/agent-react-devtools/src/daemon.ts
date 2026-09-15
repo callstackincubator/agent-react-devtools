@@ -4,7 +4,8 @@ import path from 'node:path';
 import { DevToolsBridge } from './devtools-bridge.js';
 import { ComponentTree } from './component-tree.js';
 import { Profiler } from './profiler.js';
-import type { IpcCommand, IpcResponse, DaemonInfo, StatusInfo } from './types.js';
+import type { IpcCommand, IpcResponse, DaemonInfo, StatusInfo, ProfileComponentMetadata } from './types.js';
+import { getSourceIdentity } from './source-metadata.js';
 
 const DEFAULT_STATE_DIR = path.join(
   process.env.HOME || process.env.USERPROFILE || '/tmp',
@@ -12,6 +13,8 @@ const DEFAULT_STATE_DIR = path.join(
 );
 
 let STATE_DIR = DEFAULT_STATE_DIR;
+const PROFILE_READ_ENRICH_CONCURRENCY = 5;
+const PROFILE_READ_ENRICH_TIMEOUT_MS = 1000;
 
 function getSocketPath(): string {
   return path.join(STATE_DIR, 'daemon.sock');
@@ -21,11 +24,8 @@ function getDaemonInfoPath(): string {
   return path.join(STATE_DIR, 'daemon.json');
 }
 
-/**
- * Enrich profiling result items with label + type from the component tree.
- */
 function enrichWithLabels(
-  items: Array<{ id: number; label?: string; type?: string }>,
+  items: Array<{ id: number; label?: string; type?: string; path?: string }>,
   tree: ComponentTree,
 ): void {
   for (const item of items) {
@@ -34,7 +34,65 @@ function enrichWithLabels(
       const node = tree.getNode(item.id);
       if (node) item.type = node.type;
     }
+    if (!item.path) item.path = tree.getPathString(item.id, false, 3);
   }
+}
+
+function collectStaticProfileMetadata(
+  componentIds: number[],
+  tree: ComponentTree,
+): Map<number, ProfileComponentMetadata> {
+  const metadata = new Map<number, ProfileComponentMetadata>();
+
+  for (const id of componentIds) {
+    metadata.set(id, {
+      label: tree.getLabel(id),
+      type: tree.getNode(id)?.type,
+      path: tree.getPathString(id, false, 3),
+    });
+  }
+
+  return metadata;
+}
+
+async function enrichProfileMetadataOnDemand(
+  reports: Array<{ id: number }>,
+  tree: ComponentTree,
+  bridge: DevToolsBridge,
+  profiler: Profiler,
+): Promise<void> {
+  const queue = [...new Set(reports.map((report) => report.id))];
+  if (queue.length === 0) return;
+
+  const concurrency = Math.min(PROFILE_READ_ENRICH_CONCURRENCY, queue.length);
+  await Promise.all(Array.from({ length: concurrency }, async () => {
+    while (queue.length > 0) {
+      const id = queue.shift();
+      if (id === undefined) return;
+
+      const treeMetadata: ProfileComponentMetadata = {};
+      const label = tree.getLabel(id);
+      const type = tree.getNode(id)?.type;
+      const path = tree.getPathString(id, false, 3);
+      if (label !== undefined) treeMetadata.label = label;
+      if (type !== undefined) treeMetadata.type = type;
+      if (path !== undefined) treeMetadata.path = path;
+      if (Object.keys(treeMetadata).length > 0) {
+        profiler.setComponentMetadata(id, treeMetadata);
+      }
+
+      const inspected = await bridge.inspectElement(id, {
+        preferCache: true,
+        timeoutMs: PROFILE_READ_ENRICH_TIMEOUT_MS,
+      });
+      if (!inspected?.source) continue;
+
+      profiler.setComponentMetadata(id, {
+        source: inspected.source,
+        sourceKey: getSourceIdentity(inspected.source),
+      });
+    }
+  }));
 }
 
 class Daemon {
@@ -265,16 +323,27 @@ class Daemon {
 
         case 'profile-stop': {
           await this.bridge.stopProfilingAndCollect();
+          // Build stable labels for this snapshot before the app changes again.
+          this.tree.getTree();
+          const metadata = collectStaticProfileMetadata(
+            this.profiler.getProfiledComponentIds(),
+            this.tree,
+          );
           const session = this.profiler.stop(this.tree);
           if (!session) {
             return { ok: false, error: 'No active profiling session' };
+          }
+          for (const [id, item] of metadata) {
+            this.profiler.setComponentMetadata(id, item);
           }
           enrichWithLabels(session.componentRenderCounts, this.tree);
           return { ok: true, data: session };
         }
 
         case 'profile-report': {
-          const resolvedCompId = this.tree.resolveId(cmd.componentId);
+          const resolvedCompId =
+            this.tree.resolveId(cmd.componentId) ??
+            this.profiler.resolveProfiledComponentId(cmd.componentId);
           if (resolvedCompId === undefined) {
             return { ok: false, error: `Component ${cmd.componentId} not found` };
           }
@@ -285,20 +354,27 @@ class Daemon {
               error: `No profiling data for component ${cmd.componentId}`,
             };
           }
-          enrichWithLabels([report], this.tree);
+          await enrichProfileMetadataOnDemand([{ id: resolvedCompId }], this.tree, this.bridge, this.profiler);
+          const refreshedReport = this.profiler.getReport(resolvedCompId, this.tree) || report;
           const compLabel = typeof cmd.componentId === 'string' ? cmd.componentId : undefined;
-          return { ok: true, data: report, label: compLabel };
+          return { ok: true, data: refreshedReport, label: compLabel };
         }
 
         case 'profile-slow': {
-          const slowest = this.profiler.getSlowest(this.tree, cmd.limit);
-          enrichWithLabels(slowest, this.tree);
+          const requestedLimit = cmd.limit;
+          const candidateLimit = Math.max(requestedLimit ?? 10, cmd.candidateLimit ?? requestedLimit ?? 10);
+          const candidates = this.profiler.getSlowest(this.tree, candidateLimit);
+          await enrichProfileMetadataOnDemand(candidates, this.tree, this.bridge, this.profiler);
+          const slowest = this.profiler.getSlowest(this.tree, requestedLimit ?? candidateLimit);
           return { ok: true, data: slowest };
         }
 
         case 'profile-rerenders': {
-          const rerenders = this.profiler.getMostRerenders(this.tree, cmd.limit);
-          enrichWithLabels(rerenders, this.tree);
+          const requestedLimit = cmd.limit;
+          const candidateLimit = Math.max(requestedLimit ?? 10, cmd.candidateLimit ?? requestedLimit ?? 10);
+          const candidates = this.profiler.getMostRerenders(this.tree, candidateLimit);
+          await enrichProfileMetadataOnDemand(candidates, this.tree, this.bridge, this.profiler);
+          const rerenders = this.profiler.getMostRerenders(this.tree, requestedLimit ?? candidateLimit);
           return { ok: true, data: rerenders };
         }
 

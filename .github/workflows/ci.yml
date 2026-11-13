@@ -5,6 +5,7 @@ on:
     branches: [main, changeset-release/main]
   pull_request:
     branches: [main]
+  merge_group:
 
 jobs:
   typecheck:
@@ -41,6 +42,20 @@ jobs:
       - run: bun install
       - run: bun run build
       - run: bun run --filter e2e-tests test:protocol
+
+  e2e-browser:
+    name: E2E tests (browser)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'merge_group'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - run: bun install
+      - run: bun run build
+      - run: npx --prefix packages/e2e-tests playwright install --with-deps chromium
+      - run: bun run --filter e2e-tests test:browser
 
   cli-smoke:
     name: CLI smoke test

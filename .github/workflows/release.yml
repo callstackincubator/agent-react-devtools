@@ -38,12 +38,6 @@ jobs:
       - name: E2E tests (protocol)
         run: bun run --filter e2e-tests test:protocol
 
-      - name: Install Playwright
-        run: npx --prefix packages/e2e-tests playwright install --with-deps chromium
-
-      - name: E2E tests (browser)
-        run: bun run --filter e2e-tests test:browser
-
       - name: Create release PR or publish
         id: changesets
         uses: changesets/action@v1

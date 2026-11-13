@@ -1,5 +1,17 @@
 # agent-react-devtools
 
+## 0.6.0
+
+### Minor Changes
+
+- [#59](https://github.com/callstackincubator/agent-react-devtools/pull/59) [`d25f34b`](https://github.com/callstackincubator/agent-react-devtools/commit/d25f34b568467e0b1fcde39410410bb514829a69) Thanks [@thymikee](https://github.com/thymikee)! - Tree observation commands (`get tree`, `get component`, `find`, `count`,
+  `errors`, `profile start`) now fail with a typed `no-app-attached` reason and a
+  non-zero exit code when no React app is attached, instead of reporting an empty
+  result that reads as a clean pass. When another React DevTools backend attaches
+  to the same app (React Native DevTools opening, another agent) and re-flushes the
+  tree under a fresh fiber-ID space, the daemon now replaces its frozen copy
+  instead of counting every component twice.
+
 ## 0.5.0
 
 ### Minor Changes

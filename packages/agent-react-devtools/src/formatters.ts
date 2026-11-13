@@ -7,6 +7,7 @@ import type {
 import type { TreeNode } from './component-tree.js';
 import type { ProfileSummary, TimelineResult, CommitDetail } from './profiler.js';
 import type { ProfileDiffResult, DiffEntry } from './profile-diff.js';
+import { formatSourceLocation } from './source-metadata.js';
 
 // ── Abbreviations for component types ──
 const TYPE_ABBREV: Record<string, string> = {
@@ -306,6 +307,13 @@ export function formatProfileSummary(summary: ProfileSummary): string {
 export function formatProfileReport(report: ComponentRenderReport, label?: string): string {
   const lines: string[] = [];
   lines.push(formatRef({ label: label || report.label || `#${report.id}`, type: report.type, name: report.displayName }));
+  if (report.path) {
+    lines.push(`path: ${report.path}`);
+  }
+  const src = formatSourceLocation(report.source);
+  if (src) {
+    lines.push(`src: ${src}`);
+  }
   lines.push(
     `renders:${report.renderCount}  avg:${report.avgDuration.toFixed(1)}ms  max:${report.maxDuration.toFixed(1)}ms  total:${report.totalDuration.toFixed(1)}ms`,
   );
@@ -319,32 +327,50 @@ export function formatProfileReport(report: ComponentRenderReport, label?: strin
   return lines.join('\n');
 }
 
-export function formatSlowest(reports: ComponentRenderReport[]): string {
+export function formatSlowest(reports: ComponentRenderReport[], visibleLimit?: number): string {
   if (reports.length === 0) return 'No profiling data';
 
   const lines: string[] = ['Slowest (by avg render time):'];
-  for (const r of reports) {
-    const ref = formatRef({ label: r.label, type: r.type, name: r.displayName });
-    const causes = r.causes.length > 0 ? r.causes.join(', ') : '?';
-    let line = `  ${ref}  avg:${r.avgDuration.toFixed(1)}ms  max:${r.maxDuration.toFixed(1)}ms  renders:${r.renderCount}  causes:${causes}`;
-    const keys = formatChangedKeys(r.changedKeys);
-    if (keys) line += `  changed: ${keys}`;
-    lines.push(line);
+  for (const group of groupReportsBySource(reports, visibleLimit)) {
+    if (group.type === 'single') {
+      lines.push(formatSlowReportLine(group.report));
+      continue;
+    }
+
+    const src = formatSourceLocation(group.source);
+    const top = group.reports[0];
+    let header = `  ${group.displayName}  ${group.reports.length} instances`;
+    if (src) header += `  src: ${src}`;
+    header += `  top avg:${top.avgDuration.toFixed(1)}ms`;
+    lines.push(header);
+
+    for (const report of group.reports) {
+      lines.push(formatSlowReportLine(report, true));
+    }
   }
   return lines.join('\n');
 }
 
-export function formatRerenders(reports: ComponentRenderReport[]): string {
+export function formatRerenders(reports: ComponentRenderReport[], visibleLimit?: number): string {
   if (reports.length === 0) return 'No profiling data';
 
   const lines: string[] = ['Most re-renders:'];
-  for (const r of reports) {
-    const ref = formatRef({ label: r.label, type: r.type, name: r.displayName });
-    const causes = r.causes.length > 0 ? r.causes.join(', ') : '?';
-    let line = `  ${ref}  ${r.renderCount} renders  causes:${causes}`;
-    const keys = formatChangedKeys(r.changedKeys);
-    if (keys) line += `  changed: ${keys}`;
-    lines.push(line);
+  for (const group of groupReportsBySource(reports, visibleLimit)) {
+    if (group.type === 'single') {
+      lines.push(formatRerenderReportLine(group.report));
+      continue;
+    }
+
+    const src = formatSourceLocation(group.source);
+    const top = group.reports[0];
+    let header = `  ${group.displayName}  ${group.reports.length} instances`;
+    if (src) header += `  src: ${src}`;
+    header += `  top renders:${top.renderCount}`;
+    lines.push(header);
+
+    for (const report of group.reports) {
+      lines.push(formatRerenderReportLine(report, true));
+    }
   }
   return lines.join('\n');
 }
@@ -407,6 +433,103 @@ export function formatChangedKeys(keys: ChangedKeys | undefined): string {
 }
 
 // ── Helpers ──
+
+type ReportGroup =
+  | { type: 'single'; report: ComponentRenderReport }
+  | {
+      type: 'group';
+      displayName: string;
+      source: NonNullable<ComponentRenderReport['source']>;
+      reports: ComponentRenderReport[];
+    };
+
+function formatSlowReportLine(report: ComponentRenderReport, nested = false): string {
+  const ref = formatRef({ label: report.label, type: report.type, name: report.displayName });
+  const causes = report.causes.length > 0 ? report.causes.join(', ') : '?';
+  const prefix = nested ? '    ' : '  ';
+  let line = `${prefix}${ref}  avg:${report.avgDuration.toFixed(1)}ms  max:${report.maxDuration.toFixed(1)}ms  renders:${report.renderCount}  causes:${causes}`;
+  if (report.path) line += `  in:${report.path}`;
+  const keys = formatChangedKeys(report.changedKeys);
+  if (keys) line += `  changed: ${keys}`;
+  return line;
+}
+
+function formatRerenderReportLine(report: ComponentRenderReport, nested = false): string {
+  const ref = formatRef({ label: report.label, type: report.type, name: report.displayName });
+  const causes = report.causes.length > 0 ? report.causes.join(', ') : '?';
+  const prefix = nested ? '    ' : '  ';
+  let line = `${prefix}${ref}  ${report.renderCount} renders  causes:${causes}`;
+  if (report.path) line += `  in:${report.path}`;
+  const keys = formatChangedKeys(report.changedKeys);
+  if (keys) line += `  changed: ${keys}`;
+  return line;
+}
+
+function groupReportsBySource(reports: ComponentRenderReport[], visibleLimit?: number): ReportGroup[] {
+  const buckets = new Map<string, ComponentRenderReport[]>();
+  const order: string[] = [];
+
+  for (const report of reports) {
+    if (!report.sourceKey) continue;
+    const key = `${report.displayName}::${report.sourceKey}`;
+    let bucket = buckets.get(key);
+    if (!bucket) {
+      bucket = [];
+      buckets.set(key, bucket);
+      order.push(key);
+    }
+    bucket.push(report);
+  }
+
+  const groupedKeys = new Set<string>();
+  for (const key of order) {
+    if ((buckets.get(key)?.length || 0) > 1) {
+      groupedKeys.add(key);
+    }
+  }
+
+  const groups: ReportGroup[] = [];
+  let visibleCount = 0;
+  for (const report of reports) {
+    if (visibleLimit !== undefined && visibleCount >= visibleLimit) {
+      break;
+    }
+
+    if (!report.sourceKey) {
+      groups.push({ type: 'single', report });
+      visibleCount++;
+      continue;
+    }
+
+    const key = `${report.displayName}::${report.sourceKey}`;
+    if (!groupedKeys.has(key)) {
+      groups.push({ type: 'single', report });
+      visibleCount++;
+      continue;
+    }
+
+    if (groups.some((group) => group.type === 'group' && group.reports[0]?.sourceKey === report.sourceKey && group.displayName === report.displayName)) {
+      continue;
+    }
+
+    const bucket = buckets.get(key) || [report];
+    const source = bucket[0].source;
+    if (!source) {
+      groups.push({ type: 'single', report });
+      continue;
+    }
+
+    groups.push({
+      type: 'group',
+      displayName: report.displayName,
+      source,
+      reports: bucket,
+    });
+    visibleCount++;
+  }
+
+  return groups;
+}
 
 function formatCompactValue(val: unknown): string | undefined {
   if (val === undefined) return undefined;

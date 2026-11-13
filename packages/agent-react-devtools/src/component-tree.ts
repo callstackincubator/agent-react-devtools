@@ -615,6 +615,35 @@ export class ComponentTree {
     return this.nodes.has(num) ? num : undefined;
   }
 
+  getPathSegments(id: number, includeSelf = false, maxSegments?: number): string[] {
+    const segments: string[] = [];
+    let current = this.nodes.get(id);
+    if (!current) return segments;
+
+    if (!includeSelf && current.parentId !== null) {
+      current = this.nodes.get(current.parentId);
+    } else if (!includeSelf) {
+      current = undefined;
+    }
+
+    while (current) {
+      segments.push(current.displayName);
+      if (current.parentId === null) break;
+      current = this.nodes.get(current.parentId);
+    }
+
+    segments.reverse();
+    if (maxSegments !== undefined && segments.length > maxSegments) {
+      return segments.slice(-maxSegments);
+    }
+    return segments;
+  }
+
+  getPathString(id: number, includeSelf = false, maxSegments?: number): string | undefined {
+    const segments = this.getPathSegments(id, includeSelf, maxSegments);
+    return segments.length > 0 ? segments.join(' > ') : undefined;
+  }
+
   private toTreeNode(node: ComponentNode): TreeNode {
     // Calculate depth by walking up the tree
     let depth = 0;

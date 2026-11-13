@@ -6,6 +6,7 @@ import type {
   RenderCause,
   ChangedKeys,
   ProfilingDataExport,
+  ProfileComponentMetadata,
 } from './types.js';
 import type { ComponentTree } from './component-tree.js';
 import { buildExportData } from './profile-export.js';
@@ -64,12 +65,57 @@ export class Profiler {
       stoppedAt: null,
       commits: [],
       rawRoots: [],
+      componentMetadata: new Map(),
     };
   }
 
   /** Cache a component's display name (call during profiling to survive unmounts) */
   trackComponent(id: number, displayName: string): void {
     this.displayNames.set(id, displayName);
+  }
+
+  getProfiledComponentIds(): number[] {
+    if (!this.session) return [];
+
+    const componentIds = new Set<number>();
+    for (const commit of this.session.commits) {
+      for (const id of commit.fiberActualDurations.keys()) {
+        componentIds.add(id);
+      }
+    }
+    return Array.from(componentIds);
+  }
+
+  setComponentMetadata(id: number, metadata: ProfileComponentMetadata): void {
+    if (!this.session) return;
+
+    const current = this.session.componentMetadata.get(id) || {};
+    this.session.componentMetadata.set(id, { ...current, ...metadata });
+  }
+
+  resolveProfiledComponentId(id: number | string): number | undefined {
+    if (!this.session) return undefined;
+
+    if (typeof id === 'number') {
+      return this.session.componentMetadata.has(id) ? id : undefined;
+    }
+
+    const match = id.match(/^@c\?\(id:(\d+)\)$/);
+    if (match) {
+      const parsed = parseInt(match[1], 10);
+      return this.session.componentMetadata.has(parsed) ? parsed : undefined;
+    }
+
+    if (id.startsWith('@c')) {
+      for (const [componentId, metadata] of this.session.componentMetadata) {
+        if (metadata.label === id) return componentId;
+      }
+      return undefined;
+    }
+
+    const parsed = parseInt(id, 10);
+    if (isNaN(parsed)) return undefined;
+    return this.session.componentMetadata.has(parsed) ? parsed : undefined;
   }
 
   stop(tree?: ComponentTree): ProfileSummary | null {
@@ -246,9 +292,16 @@ export class Profiler {
 
     if (renderCount === 0) return null;
 
+    const metadata = this.session.componentMetadata.get(componentId);
+
     return {
       id: componentId,
       displayName: node?.displayName || this.displayNames.get(componentId) || `Component#${componentId}`,
+      label: metadata?.label,
+      type: metadata?.type,
+      path: metadata?.path,
+      source: metadata?.source,
+      sourceKey: metadata?.sourceKey,
       renderCount,
       totalDuration,
       avgDuration: totalDuration / renderCount,
@@ -340,16 +393,8 @@ export class Profiler {
   private getAllReports(tree: ComponentTree): ComponentRenderReport[] {
     if (!this.session) return [];
 
-    // Collect all component IDs that appear in profiling data
-    const componentIds = new Set<number>();
-    for (const commit of this.session.commits) {
-      for (const id of commit.fiberActualDurations.keys()) {
-        componentIds.add(id);
-      }
-    }
-
     const reports: ComponentRenderReport[] = [];
-    for (const id of componentIds) {
+    for (const id of this.getProfiledComponentIds()) {
       const report = this.getReport(id, tree);
       if (report) reports.push(report);
     }

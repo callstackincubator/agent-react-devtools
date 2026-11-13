@@ -35,12 +35,27 @@ export interface InspectedElement {
   state: Record<string, unknown> | null;
   hooks: HookInfo[] | null;
   renderedAt: number | null;
+  source?: ComponentSourceLocation;
 }
 
 export interface HookInfo {
   name: string;
   value: unknown;
   subHooks?: HookInfo[];
+}
+
+export interface ComponentSourceLocation {
+  fileName: string;
+  lineNumber: number | null;
+  columnNumber: number | null;
+}
+
+export interface ProfileComponentMetadata {
+  label?: string;
+  type?: ComponentType;
+  path?: string;
+  source?: ComponentSourceLocation;
+  sourceKey?: string;
 }
 
 // ── Profiling ──
@@ -52,6 +67,7 @@ export interface ProfilingSession {
   commits: ProfilingCommit[];
   /** Raw per-root data from React DevTools, stored for export passthrough. */
   rawRoots: ProfilingRootRawData[];
+  componentMetadata: Map<number, ProfileComponentMetadata>;
 }
 
 export interface ProfilingCommit {
@@ -95,6 +111,9 @@ export interface ComponentRenderReport {
   displayName: string;
   label?: string;
   type?: ComponentType;
+  path?: string;
+  source?: ComponentSourceLocation;
+  sourceKey?: string;
   renderCount: number;
   totalDuration: number;
   avgDuration: number;
@@ -187,8 +206,8 @@ export type IpcCommand =
   | { type: 'profile-start'; name?: string }
   | { type: 'profile-stop' }
   | { type: 'profile-report'; componentId: number | string }
-  | { type: 'profile-slow'; limit?: number }
-  | { type: 'profile-rerenders'; limit?: number }
+  | { type: 'profile-slow'; limit?: number; candidateLimit?: number }
+  | { type: 'profile-rerenders'; limit?: number; candidateLimit?: number }
   | { type: 'profile-timeline'; limit?: number; offset?: number; sort?: 'duration' | 'timeline' }
   | { type: 'profile-commit'; index: number; limit?: number }
   | { type: 'profile-export' }

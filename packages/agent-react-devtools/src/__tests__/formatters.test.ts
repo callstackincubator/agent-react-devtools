@@ -427,6 +427,26 @@ describe('formatProfileReport', () => {
     const result = formatProfileReport(report, '@c99');
     expect(result).toContain('@c99 [fn] UserProfile');
   });
+
+  it('should show path and source context when available', () => {
+    const report: ComponentRenderReport = {
+      id: 5,
+      displayName: 'UserProfile',
+      label: '@c5',
+      type: 'function',
+      path: 'App > SettingsPage',
+      source: { fileName: '/src/components/UserProfile.tsx', lineNumber: 12, columnNumber: 3 },
+      renderCount: 2,
+      totalDuration: 20,
+      avgDuration: 10,
+      maxDuration: 12,
+      causes: ['props-changed'],
+    };
+
+    const result = formatProfileReport(report);
+    expect(result).toContain('path: App > SettingsPage');
+    expect(result).toContain('src: UserProfile.tsx:12:3');
+  });
 });
 
 describe('formatSlowest', () => {
@@ -447,6 +467,170 @@ describe('formatSlowest', () => {
     expect(result).toContain('causes:props-changed, state-changed');
     expect(result).toContain('changed: props: data  state: count');
     expect(result).toContain('changed: state: count');
+  });
+
+  it('should group rows with the same display name and source', () => {
+    const reports: ComponentRenderReport[] = [
+      {
+        id: 1,
+        displayName: 'Context.Provider',
+        label: '@c1',
+        type: 'other',
+        path: 'App > SearchPage > FiltersPanel',
+        source: { fileName: '/src/context/SearchContext.tsx', lineNumber: 12, columnNumber: 1 },
+        sourceKey: '/src/context/SearchContext.tsx:12:1',
+        renderCount: 5,
+        totalDuration: 25,
+        avgDuration: 5,
+        maxDuration: 10,
+        causes: ['parent-rendered'],
+      },
+      {
+        id: 2,
+        displayName: 'Context.Provider',
+        label: '@c2',
+        type: 'other',
+        path: 'App > SearchPage > ResultsPanel',
+        source: { fileName: '/src/context/SearchContext.tsx', lineNumber: 12, columnNumber: 1 },
+        sourceKey: '/src/context/SearchContext.tsx:12:1',
+        renderCount: 5,
+        totalDuration: 20,
+        avgDuration: 4,
+        maxDuration: 8,
+        causes: ['parent-rendered'],
+      },
+    ];
+
+    const result = formatSlowest(reports);
+    expect(result).toContain('Context.Provider  2 instances  src: SearchContext.tsx:12:1');
+    expect(result).toContain('@c1 [?] Context.Provider');
+    expect(result).toContain('in:App > SearchPage > FiltersPanel');
+    expect(result).toContain('@c2 [?] Context.Provider');
+    expect(result).toContain('in:App > SearchPage > ResultsPanel');
+  });
+
+  it('should not group rows with the same display name from different sources', () => {
+    const reports: ComponentRenderReport[] = [
+      {
+        id: 1,
+        displayName: 'Context.Provider',
+        label: '@c1',
+        type: 'other',
+        source: { fileName: '/src/context/SearchContext.tsx', lineNumber: 12, columnNumber: 1 },
+        sourceKey: '/src/context/SearchContext.tsx:12:1',
+        renderCount: 5,
+        totalDuration: 25,
+        avgDuration: 5,
+        maxDuration: 10,
+        causes: ['parent-rendered'],
+      },
+      {
+        id: 2,
+        displayName: 'Context.Provider',
+        label: '@c2',
+        type: 'other',
+        source: { fileName: '/src/context/ThemeContext.tsx', lineNumber: 9, columnNumber: 1 },
+        sourceKey: '/src/context/ThemeContext.tsx:9:1',
+        renderCount: 5,
+        totalDuration: 20,
+        avgDuration: 4,
+        maxDuration: 8,
+        causes: ['parent-rendered'],
+      },
+    ];
+
+    const result = formatSlowest(reports);
+    expect(result).not.toContain('2 instances');
+    expect(result).toContain('@c1 [?] Context.Provider');
+    expect(result).toContain('@c2 [?] Context.Provider');
+  });
+
+  it('should not group rows with missing source metadata', () => {
+    const reports: ComponentRenderReport[] = [
+      {
+        id: 1,
+        displayName: 'Context.Provider',
+        label: '@c1',
+        type: 'other',
+        renderCount: 5,
+        totalDuration: 25,
+        avgDuration: 5,
+        maxDuration: 10,
+        causes: ['parent-rendered'],
+      },
+      {
+        id: 2,
+        displayName: 'Context.Provider',
+        label: '@c2',
+        type: 'other',
+        renderCount: 5,
+        totalDuration: 20,
+        avgDuration: 4,
+        maxDuration: 8,
+        causes: ['parent-rendered'],
+      },
+    ];
+
+    const result = formatSlowest(reports);
+    expect(result).not.toContain('instances');
+  });
+
+  it('should respect visible limits after grouping', () => {
+    const reports: ComponentRenderReport[] = [
+      {
+        id: 1,
+        displayName: 'Context.Provider',
+        label: '@c1',
+        type: 'other',
+        source: { fileName: '/src/context/SearchContext.tsx', lineNumber: 12, columnNumber: 1 },
+        sourceKey: '/src/context/SearchContext.tsx:12:1',
+        renderCount: 5,
+        totalDuration: 25,
+        avgDuration: 5,
+        maxDuration: 10,
+        causes: ['parent-rendered'],
+      },
+      {
+        id: 2,
+        displayName: 'Context.Provider',
+        label: '@c2',
+        type: 'other',
+        source: { fileName: '/src/context/SearchContext.tsx', lineNumber: 12, columnNumber: 1 },
+        sourceKey: '/src/context/SearchContext.tsx:12:1',
+        renderCount: 4,
+        totalDuration: 16,
+        avgDuration: 4,
+        maxDuration: 8,
+        causes: ['parent-rendered'],
+      },
+      {
+        id: 3,
+        displayName: 'SearchResults',
+        label: '@c3',
+        type: 'function',
+        renderCount: 3,
+        totalDuration: 9,
+        avgDuration: 3,
+        maxDuration: 4,
+        causes: ['props-changed'],
+      },
+      {
+        id: 4,
+        displayName: 'Footer',
+        label: '@c4',
+        type: 'function',
+        renderCount: 2,
+        totalDuration: 4,
+        avgDuration: 2,
+        maxDuration: 3,
+        causes: ['parent-rendered'],
+      },
+    ];
+
+    const result = formatSlowest(reports, 2);
+    expect(result).toContain('Context.Provider  2 instances');
+    expect(result).toContain('@c3 [fn] SearchResults');
+    expect(result).not.toContain('@c4 [fn] Footer');
   });
 });
 
@@ -470,6 +654,56 @@ describe('formatRerenders', () => {
 
     const result = formatRerenders(reports);
     expect(result).not.toContain('changed:');
+  });
+
+  it('should group repeated rerender rows by source identity and keep mixed ordering', () => {
+    const reports: ComponentRenderReport[] = [
+      {
+        id: 1,
+        displayName: 'Context.Provider',
+        label: '@c1',
+        type: 'other',
+        path: 'App > FiltersPanel',
+        source: { fileName: '/src/context/SearchContext.tsx', lineNumber: 12, columnNumber: 1 },
+        sourceKey: '/src/context/SearchContext.tsx:12:1',
+        renderCount: 20,
+        totalDuration: 40,
+        avgDuration: 2,
+        maxDuration: 4,
+        causes: ['parent-rendered'],
+      },
+      {
+        id: 9,
+        displayName: 'SearchResults',
+        label: '@c9',
+        type: 'function',
+        path: 'App > SearchPage',
+        renderCount: 15,
+        totalDuration: 60,
+        avgDuration: 4,
+        maxDuration: 8,
+        causes: ['props-changed'],
+      },
+      {
+        id: 2,
+        displayName: 'Context.Provider',
+        label: '@c2',
+        type: 'other',
+        path: 'App > ResultsPanel',
+        source: { fileName: '/src/context/SearchContext.tsx', lineNumber: 12, columnNumber: 1 },
+        sourceKey: '/src/context/SearchContext.tsx:12:1',
+        renderCount: 12,
+        totalDuration: 20,
+        avgDuration: 1.7,
+        maxDuration: 3,
+        causes: ['parent-rendered'],
+      },
+    ];
+
+    const result = formatRerenders(reports);
+    expect(result).toContain('Context.Provider  2 instances  src: SearchContext.tsx:12:1');
+    expect(result).toContain('@c9 [fn] SearchResults  15 renders');
+    expect(result.indexOf('Context.Provider  2 instances')).toBeLessThan(result.indexOf('@c9 [fn] SearchResults'));
   });
 });
 

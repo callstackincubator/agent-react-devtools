@@ -231,6 +231,57 @@ describe('Profiler', () => {
     expect(rerenders[0].renderCount).toBe(3);
   });
 
+  it('should retain stored component metadata for offline reports', () => {
+    profiler.start('test');
+
+    profiler.processProfilingData({
+      commitData: [
+        {
+          timestamp: 1000,
+          duration: 15,
+          fiberActualDurations: [1, 10],
+          fiberSelfDurations: [1, 5],
+        },
+      ],
+    });
+
+    profiler.setComponentMetadata(1, {
+      label: '@c1',
+      type: 'function',
+      path: 'AppShell > Screen',
+      source: { fileName: '/src/App.tsx', lineNumber: 10, columnNumber: 2 },
+      sourceKey: '/src/App.tsx:10:2',
+    });
+
+    const report = profiler.getReport(1, new ComponentTree());
+    expect(report).not.toBeNull();
+    expect(report!.label).toBe('@c1');
+    expect(report!.type).toBe('function');
+    expect(report!.path).toBe('AppShell > Screen');
+    expect(report!.sourceKey).toBe('/src/App.tsx:10:2');
+  });
+
+  it('should resolve profiled components by stored label after disconnect', () => {
+    profiler.start('test');
+    profiler.processProfilingData({
+      commitData: [
+        {
+          timestamp: 1000,
+          duration: 15,
+          fiberActualDurations: [1, 10],
+          fiberSelfDurations: [1, 5],
+        },
+      ],
+    });
+
+    profiler.setComponentMetadata(1, { label: '@c1' });
+
+    expect(profiler.resolveProfiledComponentId('@c1')).toBe(1);
+    expect(profiler.resolveProfiledComponentId('1')).toBe(1);
+    expect(profiler.resolveProfiledComponentId('@c?(id:1)')).toBe(1);
+    expect(profiler.resolveProfiledComponentId('@c9')).toBeUndefined();
+  });
+
   it('should process dataForRoots nested format', () => {
     profiler.start('test');
 
